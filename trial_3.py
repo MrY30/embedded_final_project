@@ -30,7 +30,10 @@ detection_active = False
 object_buffer = deque(maxlen=10)
 
 PERSON_CLASS_ID = 0
-OBJECT_CLASS_IDS = [39, 41, 67, 73]  # bottle, cup, etc.
+OBJECT_CLASS_IDS = [24, 25, 26, 27, 28, 39, 40, 41, 42, 43, 
+                    44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 
+                    54, 55, 56, 63, 64, 65, 66, 67, 73, 74,
+                    75, 76, 77, 78, 79]
 
 # Mouse callback for drawing polygon
 def draw_border(event, x, y, flags, param):
