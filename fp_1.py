@@ -9,6 +9,12 @@ import numpy as np
 from ultralytics import YOLO
 from collections import deque
 
+import RPi.GPIO as GPIO
+
+GPIO.setmode(GPIO.BCM)
+LED_PIN = 14
+GPIO.setup(LED_PIN, GPIO.OUT)
+
 # Define and parse user input arguments
 
 parser = argparse.ArgumentParser()
@@ -251,9 +257,14 @@ while True:
             if box_inside_polygon(*p_box, border_polygon):
                 for o_box in objects:
                     if boxes_intersect(p_box, o_box):
+
+                        GPIO.output(LED_PIN, GPIO.HIGH)
+
                         state = "danger"
                         break
                 if state != "danger":
+
+                    GPIO.output(LED_PIN, GPIO.LOW)
                     state = "warning"
         
         # Count how many objects are inside the polygon
