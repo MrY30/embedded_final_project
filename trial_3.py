@@ -13,6 +13,7 @@ SUCCESS
 
 NEXT STEP:
 - ARDUINO ALARM SYSTEM
+- OBJECT COUNTER WITHIN BORDER
 
 '''
 
@@ -154,13 +155,24 @@ while True:
                         break
                 if state != "danger":
                     state = "warning"
+        
+        # Count how many objects are inside the polygon
+        objects_inside_border = 0
+        for obj_box in objects:
+            if box_inside_polygon(*obj_box, border_polygon):
+                objects_inside_border += 1
 
+        # Display Status
         color = (0, 255, 0) if state == "safe" else (0, 255, 255) if state == "warning" else (0, 0, 255)
-        cv2.putText(frame, f"Status: {state.upper()}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, color, 3)
+        cv2.putText(frame, f"Status: {state.upper()}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+
+        # Object counts
+        cv2.putText(frame, f"Objects in border: {objects_inside_border}", 
+                    (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (29, 56, 30), 1)
 
     # Instructions overlay
     cv2.putText(frame, "Press 'd' to draw, 's' to start, 'r' to reset, 'q' to quit", (10, frame.shape[0] - 10),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (39, 18, 52), 1)
 
     cv2.imshow("Border Monitor", frame)
 
