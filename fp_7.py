@@ -9,11 +9,11 @@ import numpy as np
 from ultralytics import YOLO
 from collections import deque
 
-#import RPi.GPIO as GPIO
+# import RPi.GPIO as GPIO
 
-#GPIO.setmode(GPIO.BCM)
-#LED_PIN = 14
-#GPIO.setup(LED_PIN, GPIO.OUT)
+# GPIO.setmode(GPIO.BCM)
+# LED_PIN = 14
+# GPIO.setup(LED_PIN, GPIO.OUT)
 
 # --- Argument Parsing ---
 parser = argparse.ArgumentParser()
@@ -132,17 +132,16 @@ while True:
         break
 
     for pt in border_polygon:
-        cv2.circle(frame, pt, 5, (255, 0, 0), -1)
+        cv2.circle(frame, pt, 5, (0, 255, 0), -1)
     if len(border_polygon) >= 2:
         for i in range(len(border_polygon)):
             pt1 = border_polygon[i]
             pt2 = border_polygon[(i + 1) % len(border_polygon)]
-            cv2.line(frame, pt1, pt2, (255, 0, 0), 2)
+            cv2.line(frame, pt1, pt2, (0, 255, 0), 2)
+
 
     persons = []
     objects = []
-    state = "safe"
-
     if detection_active and len(border_polygon) >= 3:
         result = model(frame, verbose=False)[0]
         current_objects = []
@@ -151,13 +150,17 @@ while True:
             cls = int(box.cls[0])
             x1, y1, x2, y2 = map(int, box.xyxy[0])
 
+            # Draw all detected boxes
+            color = (255, 0, 0) if cls == PERSON_CLASS_ID else (0, 0, 255)
+            label = f"int({int(cls)})"
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            cv2.putText(frame, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+
             if cls == PERSON_CLASS_ID:
                 persons.append((x1, y1, x2, y2))
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
             elif cls in OBJECT_CLASS_IDS:
-                if box_inside_polygon(x1, y1, x2, y2, border_polygon):
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-                    cv2.putText(frame, str(cls), (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-                    current_objects.append((x1, y1, x2, y2))
+                current_objects.append((x1, y1, x2, y2))
 
         object_buffer.append(current_objects)
         all_objects = [box for buffer in object_buffer for box in buffer]
@@ -171,6 +174,7 @@ while True:
 
         objects = remove_duplicates(all_objects)
 
+        state = "safe"
         person_inside = False
         danger_triggered = False
 
@@ -186,13 +190,14 @@ while True:
 
         if danger_triggered:
             state = "danger"
-            #GPIO.output(LED_PIN, GPIO.HIGH)
+            # GPIO.output(LED_PIN, GPIO.HIGH)
         elif person_inside:
             state = "warning"
-            #GPIO.output(LED_PIN, GPIO.LOW)
+            # GPIO.output(LED_PIN, GPIO.LOW)
         # else:
-        #     GPIO.output(LED_PIN, GPIO.LOW)
+            # GPIO.output(LED_PIN, GPIO.LOW)
 
+        # Track object class IDs inside the polygon
         if initial_object_classes is None:
             initial_object_classes = []
             for box in result.boxes:
@@ -208,9 +213,24 @@ while True:
             if box_inside_polygon(x1, y1, x2, y2, border_polygon):
                 current_object_classes.append(cls)
 
-        if sorted(current_object_classes) != sorted(initial_object_classes):
-            state = "stolen"
-            #GPIO.output(LED_PIN, GPIO.HIGH)
+        # ===== FIXED STOLEN DETECTION LOGIC =====
+        # Only check for stolen if there were initial objects
+        if initial_object_classes:  # Non-empty list
+            stolen_detected = False
+            # Get unique classes from initial objects
+            unique_classes = set(initial_object_classes)
+            for cls in unique_classes:
+                # Count occurrences in initial and current
+                count_initial = initial_object_classes.count(cls)
+                count_current = current_object_classes.count(cls)
+                # Trigger stolen only if current count is LESS than initial
+                if count_current < count_initial:
+                    stolen_detected = True
+                    break  # No need to check further
+                    
+            if stolen_detected:
+                state = "stolen"
+        # ===== END FIX =====
 
         color_map = {
             "safe": (0, 255, 0),
@@ -219,19 +239,13 @@ while True:
             "stolen": (0, 0, 128)
         }
 
-        for (x1, y1, x2, y2) in persons:
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color_map[state], 2)
-            cv2.putText(frame, state.upper(), (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_map[state], 1)
+        cv2.putText(frame, f"Status: {state.upper()}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_map[state], 1)
 
-    cv2.putText(frame, "Press 'd' to draw, 's' to start, 'r' to reset, 'q' to quit", (20,40),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (178, 83, 238), 1)
-    # Display list of detected object classes when detection is active
-    if detection_active and len(border_polygon) >= 3:
-        detected_class_ids = list(set(current_object_classes))
-        detected_text = f"Detected Objects: {detected_class_ids}" if detected_class_ids else "Detected Objects: None"
-        cv2.putText(frame, detected_text, (10, frame.shape[0] - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+    cv2.putText(frame, "Press 'd' to draw, 's' to start, 'r' to reset, 'q' to quit", (10, frame.shape[0] - 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (39, 18, 52), 1)
     cv2.imshow("Border Monitor", frame)
 
+# --- Cleanup ---
 if source_type in ['video', 'usb']:
     cap.release()
 elif source_type == 'picamera':
@@ -239,3 +253,7 @@ elif source_type == 'picamera':
 if record:
     recorder.release()
 cv2.destroyAllWindows()
+
+
+
+# python fp_7.py --model=yolov10n_ncnn_model --source=usb0 --resolution=1280x720A
